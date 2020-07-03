@@ -1,0 +1,297 @@
+---
+title: "Jacksonville Wards Analysis"
+author: "Ray Thompson"
+date: "6/19/2020"
+output: 
+  html_document:
+    toc:  true
+    toc_float:
+      collapsed: true
+      smooth_scroll: false
+params:
+  ward:  ward1
+  compareTo:  ward2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, echo = TRUE)
+library(ggplot2)
+library(ggmap)
+library(gridExtra)
+library(grid)
+library(dplyr)
+load("Jacksonville Wards.RData")
+ward <- get(params$ward)
+```
+
+# Introduction
+The purpose of this document is to generate voter statistics on the first ward of Jacksonville, North Carolina. The first half covers general demographics of registered voters. Then an analysis of voting history from elections in the last 10 years. Lastly, I display useful subsets for political campaigns. This is still a work in progress.
+
+### Data
+The datasets used in this analysis is public information obtained from the North Carolina [State Board Of Elections website](https://dl.ncsbe.gov/). Below is a list of the columns for the voter and voter history data set. 
+```{r echo=FALSE}
+glimpse(ncVoterRaw)
+glimpse(ncVoterHisRaw)
+```
+
+The voter file provided by the NCSBE contains `r length(ncVoterRaw$ncid)` records of past and present voters. There is an average of `r round(mean( c( length(ward1$ncid),length(ward2$ncid) ,length(ward3$ncid),  length(ward4$ncid))))` records for each Ward. Ward 1 contains `r length(ward$ncid)` records.
+
+# Ward Demographics
+
+## Party
+
+### Average age by party
+```{r age, echo=FALSE, fig.align='center'}
+mu <- ward %>% select(party_cd, birth_age) %>% group_by(party_cd) %>% summarise(Average.Age = mean(birth_age))
+mu
+mu <- mu %>% filter(party_cd %in% c("DEM", "REP", "UNA"))
+ggplot(data = ward, mapping = aes(x = birth_age, fill = party_cd)) + 
+  geom_vline(data=mu, aes(xintercept=Average.Age, color= party_cd), linetype="solid", show.legend = FALSE) +
+  labs(x = "Age", y = "Count", title = "Registered voters: Average age by party", fill = "Party\n") +
+  geom_histogram(binwidth = 1) + scale_x_continuous(limits = c(1, 100)) + 
+  scale_y_continuous(limits = c(0,200)) +
+  scale_fill_manual(values = c("purple", "blue", "green", "orange",
+                               "red", "black")) +
+  scale_colour_manual(values = c("blue", "red", "black"))
+```
+
+Unaffiliated voters comprise the largest chunk of registered voters and also have a lower mean age than Democrats and Republicans. Democrats are the second largest chunk with the highest mean age among all parties. Republicans are on average 12 years younger than democrats and 1.5 years older than unaffiliated voters. 
+
+### No. of voters by party
+```{r ageCont,echo=FALSE, fig.align='center'}
+summary(ward$party_cd)
+```
+
+### No. of voters per age group
+```{r ,echo=FALSE, fig.show='hold', out.width="50%"}
+ageGroupPie <- ward %>% select(party_cd, age_grp) %>% filter(party_cd == "DEM", age_grp %in% c("18-34", "35-49", "50-64", "65+")) %>% 
+  count(age_grp)
+dpie <- pie(ageGroupPie$n, ageGroupPie$age_grp, main = "Democratic Age Groups")
+ageGroupPie <- ward %>% select(party_cd, age_grp) %>% filter(party_cd == "REP", age_grp %in% c("18-34", "35-49", "50-64", "65+")) %>% 
+  count(age_grp)
+rpie <- pie(ageGroupPie$n, ageGroupPie$age_grp, main = "Republican Age Groups")
+ageGroupPie <- ward %>% select(party_cd, age_grp) %>% filter(party_cd == "UNA", age_grp %in% c("18-34", "35-49", "50-64", "65+")) %>% 
+  count(age_grp)
+unaff <- pie(ageGroupPie$n, ageGroupPie$age_grp, main = "Unaffiliated Age Groups")
+ageGroupPie <- ward %>% select(party_cd, age_grp) %>% filter(party_cd == "LIB", age_grp %in% c("18-34", "35-49", "50-64", "65+")) %>% 
+  count(age_grp)
+lpie <- pie(ageGroupPie$n, ageGroupPie$age_grp, main = "Libertarian Age Groups")
+summary(ward$age_grp)
+```
+ 
+There are around 1700 more registered voters in the 18-49 demographic than people 50+. This is interesting because as you'll see in the "Voter History" section of this document, the 50+ demographic takes up a much larger share of the votes cast from 2010-2020. 
+
+### Distribution on Map
+
+![](Rplot01.png)
+
+It appears that the first ward is comprised of 5-6 neighborhood with one being inside Camp Lejeune.  The age group of 18-34 appears to be the most diverse in terms of party affiliation. There seems to be a trend of democrat affiliation the older an age group is. That does not seem to apply to the neighborhood in Camp Lejeune as the marines there are usually republican or unaffiliated. 
+
+### Party by Race
+```{r, echo=FALSE, warning=FALSE}
+ggplot(data = ward, mapping = aes(x = party_cd, fill=race_code)) +
+  geom_bar() + labs(x = "Party", y = "Count") 
+```
+
+It's obvious that a majority of black people are either in the democratic party or are unaffiliated. There are over 1000 white republican and unaffiliated voters and under 250 white Democratic voters.
+
+### Party by Sex
+```{r, echo=FALSE, warning=FALSE}
+x <- ward %>% filter(gender_code == "F" | gender_code == "M")
+ggplot(data = x, mapping = aes(x = party_cd, fill=race_code)) +
+  geom_bar() + labs(x = "Party", y = "Count") + facet_wrap(~ gender_code)
+```
+
+Overall, there are more female registered voters than males. There are much more black women democrats than black male democrats. There are slightly less white male democrats than white female democrats.
+
+### No. of voters by gender
+```{r, echo=FALSE }
+summary(ward$gender_code)
+```
+
+## Age
+
+### Average Age by Race
+```{r, echo=FALSE, warning=FALSE}
+mu <- ward %>% select(race_code, birth_age) %>% group_by(race_code) %>% summarise(Average.Age = mean(birth_age))
+mu
+```
+
+```{r, echo=FALSE}
+mu <- mu %>% filter(race_code %in% c("B","W", "M"))
+ggplot(data = ward, mapping = aes(x = birth_age, fill = race_code)) + 
+  geom_vline(data=mu, aes(xintercept=Average.Age, color= race_code), linetype="solid", show.legend = FALSE) +
+  labs(x = "Age", y = "Count", title = "Registered voters of Ward 1: Average age by race", fill = "Party\n") +
+  geom_histogram(binwidth = 1) + scale_x_continuous(limits = c(1, 100)) + 
+  scale_y_continuous(limits = c(0,200)) +
+  scale_fill_manual(values = c("purple", "blue", "green", "orange",
+                                 "black", "white", "red")) +
+  scale_colour_manual(values = c("blue", "orange", "red"))
+```
+
+### No. of voters by Race
+```{r, echo=FALSE}
+summary(ward$race_code)
+```
+
+### Distribution on Map
+
+![](Raceplot02.png)
+
+There are two special minority-majority wards in Jacksonville. This district has a slight white majority, but I wouldn't be surprised if this is one of the special wards created ten years ago. The 18-34 demographic is mostly white, but as the sample grows towards 50 years old, two neighborhoods in town become mostly black. The third has so few older members that I believe it may be housing for marines. There are more elderly black registered voters than elderly white voters. There are also more young white registered voters than young black voters.  
+
+### Race and Sex
+```{r, echo=FALSE, warning=FALSE}
+ggplot(data = ward, mapping = aes(x = race_code, fill=gender_code)) +
+  geom_bar(position = "dodge") + labs(x = "Race Code", y = "Count")
+```
+
+### Average Age by Sex
+```{r, echo=FALSE, warning=FALSE}
+mu <- ward %>% select(gender_code, birth_age) %>% group_by(gender_code) %>% summarise(Average.age = mean(birth_age))
+mu
+ggplot(data = ward, mapping = aes(x = birth_age, fill = gender_code)) +
+  labs(x = "Age", y = "Count", title = "Registered voters: Average age by gender_code", fill = "gender_code\n") +
+  geom_histogram(binwidth = 1) + scale_x_continuous(limits = c(1, 100)) + 
+  scale_y_continuous(limits = c(0,200)) +
+  scale_fill_manual(values = c("red", "blue", "black", "orange",
+                                 "black", "white", "red")) 
+summary(ward$gender_code)
+```
+
+### General Age Summary
+```{r, echo=FALSE}
+summary(ward$birth_age)
+```
+
+There are multiple 17 year old voters registered in preparation for the 2020 elections. The oldest person on the roll is 120 and he is listed as voting in 2016 in person. He is the only person on the roll above 100 and I'm not sure if it is an error. 
+
+# Voter History
+
+## Registration
+
+### Registrations by year
+```{r, echo=FALSE}
+mu <- ward1Full %>% filter(registr_dt >= "2000-01-01")
+summary(ward1Full$registr_dt)
+ggplot(data = mu, aes(x = registr_dt, fill= party_cd)) + geom_histogram()
+```
+I believe the largest registration spikes are for the 2008, 2012, and 2016 elections. There are noticeably smaller spikes for the 2018 midterms and 2020 election. 
+
+## Elections
+
+### votes cast by age group
+```{r, echo=FALSE}
+mu <- ncVoterFullTrim %>% filter(ward_abbrv == "JW1") %>% group_by(election_desc) %>% summarise(votes_cast = n()) %>% arrange(desc(votes_cast))
+ggplot(data = ward1Full, aes(x = election_lbl, fill= age_grp)) + geom_histogram()
+summary(ward1$age_grp)
+```
+The 50+ age group consistently votes more than ages 18-49 although the 2016 saw a roughly equal amount of both. The 2020 primary had a very low number of young voters even though they outnumber elderly voters and had multiple progressive candidates on the ballot.
+
+# SubSets
+
+
+# Hypothesis test
+## Permutation Tests 
+### Difference between generations
+```{r, echo=FALSE}
+old_young <- ward1Full %>% group_by(ncid, age_grp) %>% filter(election_lbl >= "2010-11-02", election_lbl <= "2020-03-03", registr_dt <= "2010-11-02") %>% count(ncid)
+young <- subset(old_young, age_grp == "18-34" | age_grp == "35-49")
+old <- subset(old_young, age_grp == "50-64" | age_grp == "65+")
+x <- sample(nrow(young), 200)
+young <- young[x,]
+x <- sample(nrow(old), 200)
+old <- old[x,]
+ggplot(data = young, aes(x = n)) + 
+  geom_histogram(bins=8, color = "white", fill = "green") + 
+  labs(title = "Votes Cast by Voters 18-49", x = "Votes cast", y = "Number of Voters", subtitle = "2010-2020")
+ggplot(data = old, aes(x = n)) + 
+  geom_histogram(bins=8, color = "white", fill = "green") + 
+  labs(title = "Votes Cast by Voters 50+", x = "Votes cast", y = "Number of Voters", subtitle = "2010-2020")
+```
+
+#### Sample summary
+```{r}
+summary(young$n)
+summary(old$n)
+observed.diff <- mean(old$n) - mean(young$n)
+observed.diff
+```
+
+#### Plotting results
+```{r}
+num_iter <- 10000
+n <- 100
+result <- numeric(num_iter) #setup a vector to store the permutation test results
+sample <- rbind(young,old)
+for(i in 1:num_iter)
+{
+  index <- sample(length(sample$n), size = n, replace = FALSE)  # choose a sample of numbers from the data to represent the votes at random
+  result[i] <- mean(sample$n[index]) - mean(sample$n[-index]) 
+}
+ggplot() + geom_histogram(aes(result)) + geom_vline(xintercept=observed.diff, colour = "red")
+
+pval1 <- (sum(result >= observed.diff) + 1)/(num_iter+1)  # an approximate p-value
+pval2 <- (sum(result <= observed.diff) + 1)/(num_iter+1)
+pval <- 2*min(pval1,pval2)
+pval
+```
+
+### Difference between parties
+```{r, echo=FALSE}
+dem_rep <- ward1Full %>% group_by(ncid, party_cd) %>% filter(election_lbl >= "2010-11-02", election_lbl <= "2020-03-03", registr_dt <= "2010-11-02") %>% count(ncid)
+dem <- subset(dem_rep, party_cd == "DEM")
+rep <- subset(dem_rep, party_cd == "REP")
+una <- subset(dem_rep, party_cd == "UNA")
+x <- sample(nrow(rep), 100)
+rep <- rep[x,]
+x <- sample(nrow(dem), 100)
+dem <- dem[x,]
+x <- sample(nrow(una), 100)
+una <- una[x,]
+
+ggplot(data = dem, aes(x = n)) + 
+  geom_histogram(bins=8, color = "white", fill = "green") + 
+  labs(title = "Votes Cast by Democratic Voters",x = "Votes cast", y = "Number of Voters", subtitle = "2010-2020")
+
+ggplot(data = rep, aes(x = n)) + 
+  geom_histogram(bins=8, color = "white", fill = "green") + 
+  labs(title = "Votes Cast by Republican voters",x = "Votes cast", y = "Number of Voters", subtitle = "2010-2020")
+
+ggplot(data = una, aes(x = n)) + 
+  geom_histogram(bins=8, color = "white", fill = "green") + 
+  labs(title = "Votes Cast by Unaffiliated voters",x = "Votes cast", y = "Number of Voters", subtitle = "2010-2020")
+
+```
+
+#### Sample summary
+```{r}
+summary(dem$n)
+summary(rep$n)
+summary(una$n)
+observed.diff <- mean(dem$n) - mean(rep$n)
+observed.diff
+```
+
+#### Plotting results
+```{r}
+num_iter <- 10000
+n <- 100
+
+result <- numeric(num_iter)
+sample <- rbind(dem,rep)
+
+for(i in 1:num_iter)
+{
+  index <- sample(length(sample$n), size = n, replace = FALSE)  
+  rep_index <- sample(length(sample$n), size = n, replace = FALSE)
+  result[i] <- mean(sample$n[index]) - mean(sample$n[-index]) 
+}
+ggplot() + geom_histogram(aes(result)) + geom_vline(xintercept=observed.diff, colour = "red")
+
+pval1 <- (sum(result >= observed.diff) + 1)/(num_iter+1) 
+pval2 <- (sum(result <= observed.diff) + 1)/(num_iter+1)
+pval <- 2*min(pval1,pval2)
+pval
+```
+
