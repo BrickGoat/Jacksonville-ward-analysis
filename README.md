@@ -10,4 +10,4 @@ The purpose of this document is to generate voter statistics on the first ward o
 
 ### Data
 
-The datasets used in this analysis is public information obtained from the North Carolina [State Board Of Elections website](https://dl.ncsbe.gov/). Below is a list of the columns for the voter and voter history data set.
+The datasets used in this analysis is public information obtained from the North Carolina [State Board Of Elections website](https://dl.ncsbe.gov/). 
